@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import webbrowser
 from io import BytesIO
-from tkinter import Button, Frame, Label, StringVar, Tk
+from tkinter import Button, Entry, Frame, Label, StringVar, Tk
 
 from PIL import Image, ImageTk
 
@@ -33,23 +33,58 @@ class ReviewApp:
 
         self.root = Tk()
         self.root.title("photoFinder — проверка")
-        self.root.geometry("640x740")
+        self.root.geometry("640x760")
 
         self.counter_var = StringVar()
-        self.name_var = StringVar()
+        self.barcode_var = StringVar()
+        self.name_text_var = StringVar()
         self.status_var = StringVar()
         self.auto_var = StringVar()
+        self.toast_var = StringVar()
+        self._toast_job = None
+
+        bg = self.root.cget("bg")
 
         Label(self.root, textvariable=self.counter_var, font=("Arial", 10)).pack(pady=(10, 0))
         self.image_label = Label(self.root)
         self.image_label.pack(pady=10)
+
+        # Штрихкод — кликабельный (копируется по клику) и выделяемый мышью.
+        self.barcode_entry = Entry(
+            self.root,
+            textvariable=self.barcode_var,
+            state="readonly",
+            justify="center",
+            font=("Arial", 15, "bold"),
+            fg="#0b66c3",
+            readonlybackground=bg,
+            relief="flat",
+            bd=0,
+            cursor="hand2",
+        )
+        self.barcode_entry.pack(pady=(0, 2))
+        self.barcode_entry.bind("<Button-1>", lambda e: self.copy_barcode())
         Label(
             self.root,
-            textvariable=self.name_var,
-            font=("Arial", 13, "bold"),
-            wraplength=600,
-            justify="center",
+            text="(клик по штрихкоду — скопировать)",
+            font=("Arial", 8),
+            fg="gray",
         ).pack()
+
+        # Название — выделяется и копируется (Ctrl+C).
+        name_entry = Entry(
+            self.root,
+            textvariable=self.name_text_var,
+            state="readonly",
+            justify="center",
+            font=("Arial", 12),
+            readonlybackground=bg,
+            relief="flat",
+            bd=0,
+        )
+        name_entry.pack(fill="x", padx=20, pady=(4, 0))
+
+        Label(self.root, textvariable=self.toast_var, font=("Arial", 9, "bold"), fg="#1a7f37").pack(pady=(2, 0))
         Label(self.root, textvariable=self.status_var, font=("Arial", 9), fg="gray").pack(pady=(0, 4))
         Label(self.root, textvariable=self.auto_var, font=("Arial", 10, "bold"), fg="#1a7f37").pack(pady=(0, 6))
 
@@ -130,7 +165,8 @@ class ReviewApp:
         self.counter_var.set(
             f"Товар {self.product_idx + 1}/{total} · кандидат {self.candidate_idx + 1}/{n_candidates}"
         )
-        self.name_var.set(f"{code}\n{name}")
+        self.barcode_var.set(code)
+        self.name_text_var.set(name)
 
         candidate = self.candidates[self.candidate_idx]
         parts = []
@@ -164,6 +200,20 @@ class ReviewApp:
         if not width or not height:
             return False
         return max(width, height) < config.MIN_IMAGE_DIMENSION
+
+    def copy_barcode(self):
+        code = self.barcode_var.get().strip()
+        if not code:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(code)
+        self._show_toast("✓ Скопировано в буфер обмена")
+
+    def _show_toast(self, text):
+        self.toast_var.set(text)
+        if self._toast_job is not None:
+            self.root.after_cancel(self._toast_job)
+        self._toast_job = self.root.after(1500, lambda: self.toast_var.set(""))
 
     def render_image(self, url):
         try:
@@ -272,14 +322,16 @@ class ReviewApp:
         self.root.destroy()
 
     def finish(self):
-        self.name_var.set("Готово — товары закончились")
+        self.barcode_var.set("")
+        self.name_text_var.set("Готово — товары закончились")
         self.counter_var.set("")
         self.status_var.set("")
         self.image_label.configure(image="", text="")
         self._photo = None
 
     def stop_on_quota(self, message: str):
-        self.name_var.set(message)
+        self.barcode_var.set("")
+        self.name_text_var.set(message)
         self.counter_var.set("")
         self.status_var.set("")
         self.image_label.configure(image="", text="")

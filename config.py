@@ -61,12 +61,37 @@ BRAVE_COST_PER_CALL = 0.005
 SERPAPI_COST_PER_CALL = 0.025
 MAX_PAID_SPEND_USD = 20.0
 
-USE_SCRAPE_SEARCH = False  # paused: Bing scraping proved flaky in testing, revisit later
-SCRAPE_HEADLESS = True
+# ─────────────────────────────────────────────────────────────────────────────
+# ИСТОЧНИКИ ПОИСКА — порядок и включение.
+# Список = приоритет (сверху вниз). Чтобы выключить источник — уберите его из списка
+# (или закомментируйте строку). Чтобы поменять приоритет — переставьте строки.
+# Доступные значения:
+#   "google" — SerpAPI Google Images  (дороже: ~$0.025/запрос, но качественнее)
+#   "brave"  — Brave image search      (дешевле: ~$0.005/запрос)
+#   "yandex" — Яндекс.Картинки через SerpAPI (~$0.025/запрос)
+#   "bing"   — бесплатный скрейпинг через Playwright (НЕСТАБИЛЬНО, требует playwright)
+SEARCH_PROVIDERS = [
+    "google",
+    "brave",
+    # "yandex",
+    # "bing",
+]
+SCRAPE_HEADLESS = True  # для "bing": True = браузер скрыт, False = видно окно (для отладки)
 
-# Яндекс.Картинки через SerpAPI (движок yandex_images, тот же ключ SerpAPI, платно).
-# Срабатывает только как последний запасной источник, когда Brave и Google ничего не дали.
-USE_YANDEX_FALLBACK = False
+# ─────────────────────────────────────────────────────────────────────────────
+# ЗАПРОСЫ — что и в каком порядке ищем для каждого товара.
+# Список = порядок попыток. Возможные значения:
+#   "barcode"       — только штрихкод              (как оператор ищет вручную)
+#   "name_barcode"  — «название штрихкод» вместе
+#   "name"          — только название (как в файле, напр. на румынском)
+#   "name_en"       — название, переведённое на английский (нужен TRANSLATE_TO_ENGLISH=True)
+QUERY_ORDER = [
+    "barcode",
+    "name_barcode",
+    "name",
+]
+# Перевод названия на английский для запроса "name_en" (требует пакет deep-translator).
+TRANSLATE_TO_ENGLISH = False
 
 USE_RELEVANCE_SCORING = True
 RELEVANCE_MODEL_ID = "google/siglip2-base-patch16-224"

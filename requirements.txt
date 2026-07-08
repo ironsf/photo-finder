@@ -5,6 +5,9 @@ transformers
 # torch (CPU-only) — install separately to avoid a huge CUDA download:
 #   pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-# playwright — only needed if you re-enable USE_SCRAPE_SEARCH in config.py (off by default):
+# deep-translator — only needed if TRANSLATE_TO_ENGLISH = True in config.py (off by default):
+#   pip install deep-translator
+
+# playwright — only needed if you add "bing" to SEARCH_PROVIDERS in config.py (off by default):
 #   pip install playwright
 #   playwright install chromium

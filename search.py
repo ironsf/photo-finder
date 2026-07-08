@@ -134,15 +134,50 @@ def _finalize(candidates: list[dict], name: str) -> list[dict]:
     return candidates
 
 
+def _query_for_kind(kind: str, code: str, name: str) -> str:
+    if kind == "barcode":
+        return code
+    if kind == "name":
+        return name
+    if kind == "name_barcode":
+        return f"{name} {code}".strip() if (name or code) else ""
+    if kind == "name_en":
+        if not (name and config.TRANSLATE_TO_ENGLISH):
+            return ""
+        try:
+            import translate
+
+            return translate.to_english(name)
+        except Exception as e:
+            print(f"[translate] пропущен перевод «{name}»: {e}")
+            return ""
+    return ""
+
+
 def _build_queries(code: str, name: str) -> list[str]:
+    """Строит список поисковых запросов согласно config.QUERY_ORDER (без дублей и пустых)."""
     queries = []
-    if name and code:
-        queries.append(f"{name} {code}")
-    if name:
-        queries.append(name)
-    if code:
-        queries.append(code)
+    for kind in config.QUERY_ORDER:
+        q = _query_for_kind(kind, code, name)
+        if q and q not in queries:
+            queries.append(q)
     return queries
+
+
+_PROVIDER_FNS = {
+    "google": lambda: serpapi_image_search,
+    "brave": lambda: brave_image_search,
+    "yandex": lambda: yandex_image_search,
+}
+
+
+def _provider_fn(name: str):
+    if name == "bing":
+        import playwright_search
+
+        return playwright_search.bing_image_search
+    factory = _PROVIDER_FNS.get(name)
+    return factory() if factory else None
 
 
 def _split_by_size(candidates: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -167,23 +202,21 @@ def rank_batch(candidates: list[dict], name: str) -> list[dict]:
 
 
 def build_search_plan(code: str, name: str) -> list[tuple]:
-    """Упорядоченный план (провайдер, запрос), дешёвые первыми.
+    """Упорядоченный план (провайдер, запрос) по config.SEARCH_PROVIDERS × config.QUERY_ORDER.
 
-    Порядок: Brave по всем вариантам запроса → SerpAPI/Google → (опц.) Яндекс.
-    Каждый шаг — один платный вызов; UI подгружает следующий шаг только когда
-    пользователь исчерпал текущих кандидатов, поэтому обычно тратится 1 вызов.
+    Порядок в списках задаёт приоритет. Каждый шаг — один платный вызов; UI подгружает
+    следующий шаг только когда пользователь исчерпал текущих кандидатов, поэтому обычно
+    тратится 1 вызов на товар (первый провайдер × первый запрос).
     """
     queries = _build_queries(code, name)
-    providers = []
-    if config.USE_SCRAPE_SEARCH:
-        import playwright_search
-
-        providers.append(playwright_search.bing_image_search)
-    providers.append(brave_image_search)
-    providers.append(serpapi_image_search)
-    if config.USE_YANDEX_FALLBACK:
-        providers.append(yandex_image_search)
-    return [(fn, q) for fn in providers for q in queries]
+    plan = []
+    for provider_name in config.SEARCH_PROVIDERS:
+        fn = _provider_fn(provider_name)
+        if fn is None:
+            continue
+        for q in queries:
+            plan.append((fn, q))
+    return plan
 
 
 def search_candidates(code: str, name: str) -> list[dict]:
