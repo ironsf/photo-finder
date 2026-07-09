@@ -152,6 +152,14 @@ class ReviewApp:
             except state.QuotaExceededError as e:
                 self.stop_on_quota(str(e))
                 return
+            except Exception as e:
+                import traceback
+
+                traceback.print_exc()
+                print(f"[error] {code} — сбой при поиске/обработке: {e} — пропускаю товар")
+                state.append_row(state.make_row(code, name, "error", error_msg=str(e)))
+                self.product_idx += 1
+                continue
             if not self.candidates:
                 print(f"[notfound] {code} — нет кандидатов")
                 state.append_row(state.make_row(code, name, "notfound"))
@@ -293,6 +301,15 @@ class ReviewApp:
             more = self._fetch_next_batch()
         except state.QuotaExceededError as e:
             self.stop_on_quota(str(e))
+            return
+        except Exception as e:
+            import traceback
+
+            traceback.print_exc()
+            print(f"[error] {code} — сбой при догрузке: {e} — пропускаю товар")
+            state.append_row(state.make_row(code, name, "error", error_msg=str(e)))
+            self.product_idx += 1
+            self.load_current_product()
             return
         if more:
             self.candidates.extend(more)
