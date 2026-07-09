@@ -1,12 +1,45 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.parse
 import urllib.request
 
 import cache
 import config
 import state
+
+# Источники, отключённые на текущую сессию (например, после HTTP 429 — исчерпан лимит).
+_disabled_providers: set[str] = set()
+
+
+def run_provider(provider_name: str, fn, query: str) -> list[dict]:
+    """Безопасный вызов источника: сетевые ошибки не роняют программу.
+
+    - QuotaExceededError (наш лимит бюджета) пробрасывается наверх, чтобы штатно остановиться.
+    - HTTP 429 (слишком много запросов / исчерпан лимит) → источник отключается на всю сессию,
+      чтобы не долбить его впустую; поиск переходит к следующему источнику.
+    - Прочие ошибки (таймаут, 5xx, обрыв) → пропускаем этот шаг, идём дальше.
+    """
+    if provider_name in _disabled_providers:
+        return []
+    try:
+        return fn(query)
+    except state.QuotaExceededError:
+        raise
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            _disabled_providers.add(provider_name)
+            print(
+                f"[{provider_name}] HTTP 429 Too Many Requests — лимит источника исчерпан. "
+                f"Отключаю его на эту сессию, переключаюсь на остальные источники."
+            )
+        else:
+            print(f"[{provider_name}] HTTP {e.code} по запросу «{query}» — пропускаю этот шаг.")
+        return []
+    except Exception as e:
+        print(f"[{provider_name}] ошибка по запросу «{query}»: {e} — пропускаю этот шаг.")
+        return []
 
 
 def brave_image_search(query: str, count: int = None) -> list[dict]:
@@ -215,14 +248,14 @@ def build_search_plan(code: str, name: str) -> list[tuple]:
         if fn is None:
             continue
         for q in queries:
-            plan.append((fn, q))
+            plan.append((provider_name, fn, q))
     return plan
 
 
 def search_candidates(code: str, name: str) -> list[dict]:
     """Первая порция кандидатов (для тестов/обратной совместимости)."""
-    for fn, query in build_search_plan(code, name):
-        candidates = fn(query)
+    for provider_name, fn, query in build_search_plan(code, name):
+        candidates = run_provider(provider_name, fn, query)
         if candidates:
             return rank_batch(candidates, name)
     return []

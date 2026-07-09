@@ -71,8 +71,8 @@ MAX_PAID_SPEND_USD = 20.0
 #   "yandex" — Яндекс.Картинки через SerpAPI (~$0.025/запрос)
 #   "bing"   — бесплатный скрейпинг через Playwright (НЕСТАБИЛЬНО, требует playwright)
 SEARCH_PROVIDERS = [
-    "google",
-    "brave",
+    "brave",   # основной: дешевле (~$0.005) и высокие лимиты
+    "google",  # запасной: качественнее, но платный SerpAPI-лимит легко исчерпать (HTTP 429)
     # "yandex",
     # "bing",
 ]
