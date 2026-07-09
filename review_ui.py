@@ -106,7 +106,13 @@ class ReviewApp:
         self.root.bind("<Escape>", lambda e: self.on_quit())
         self.root.protocol("WM_DELETE_WINDOW", self.on_quit)
 
-        self.load_current_product()
+        # Показываем окно сразу с сообщением, а долгий первый шаг (загрузка модели ~1.4 ГБ при первом
+        # запуске + поиск первого товара) запускаем после отрисовки окна — чтобы не выглядело «зависшим».
+        self.name_text_var.set(
+            "Загрузка… при первом запуске скачивается модель (~1.4 ГБ), это займёт несколько минут"
+        )
+        self.root.update()
+        self.root.after(50, self.load_current_product)
 
     def current_product(self):
         return self.products[self.product_idx]
@@ -119,9 +125,9 @@ class ReviewApp:
         """
         code, name = self.current_product()
         while self._plan_idx < len(self._plan):
-            fn, query = self._plan[self._plan_idx]
+            provider_name, fn, query = self._plan[self._plan_idx]
             self._plan_idx += 1
-            raw = fn(query)
+            raw = search.run_provider(provider_name, fn, query)
             fresh = [c for c in raw if c["image_url"] not in self._seen_urls]
             if not fresh:
                 continue
